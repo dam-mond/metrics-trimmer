@@ -5,7 +5,7 @@ Provides the ability to trim Neo4j metric files based on a start date, to only c
 ## Usage
 
 1. Download the latest release
-2. Execute the downloaded .jar as follows:
+2. Execute the downloaded .jar as follows (it requires Java 11):
 
 ```
 java -jar metrics-trimmer-<VERSION>.jar --sourcePath=<SOURCE_PATH> --destinationPath=<DESTINATION_PATH> --startDate=<START_DATE>
