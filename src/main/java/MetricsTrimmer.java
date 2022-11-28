@@ -108,50 +108,51 @@ class MetricsTrimmer implements Callable<Integer> {
     }
 
     private void execute(Path path) {
-        if(debug){
+        if (debug) {
             System.out.println("Filename: " + path.getFileName());
         }
 
         String fileName = path.getFileName().toString();
-        if(path.getFileName().toString().toLowerCase().endsWith(".zip")){
+        if (path.getFileName().toString().toLowerCase().endsWith(".zip")) {
             fileName = unzipCsv(path);
         }
 
-        if(path.getFileName().toString().toLowerCase().endsWith(".csv") || path.getFileName().toString().toLowerCase().contains(".csv.")){
+        if (path.getFileName().toString().toLowerCase().endsWith(".csv") || path.getFileName().toString().toLowerCase().contains(".csv.")) {
             String absolutePathFile = sourcePath + "/" + fileName;
 
             List<String> headersList = new ArrayList<>();
             HashMap<String, List<String>> newCsvMap = new LinkedHashMap<>();
 
-            if(isLastDateInFileMoreThenStartDate(absolutePathFile) && (parsedEndDate != null ? isFirstDateInFileLessThenEndDate(absolutePathFile) : true)){
+            if (isLastDateInFileMoreThenStartDate(absolutePathFile) && (parsedEndDate != null ? isFirstDateInFileLessThenEndDate(absolutePathFile) : true)) {
                 try (CSVReader reader = new CSVReader(new FileReader(absolutePathFile))) {
                     List<String[]> r = reader.readAll();
 
                     int idx = 0;
                     for (String[] strings : r) {
-                        if(idx == 0){
+                        if (idx == 0) {
                             headersList.addAll(Arrays.asList(strings));
                         }
-                        try{
+                        try {
                             long rowDate = Long.parseLong(strings[0] + "000");
-                            if(rowDate >= parsedStartDate.getTime() && rowDate <= parsedEndDate.getTime()){
+                            if (rowDate >= parsedStartDate.getTime() && rowDate <= parsedEndDate.getTime()) {
                                 List<String> values = new ArrayList<>(Arrays.asList(strings).subList(1, strings.length));
                                 newCsvMap.put(strings[0], values);
                             }
-                        }catch (Exception ignored) { }
+                        } catch (Exception ignored) {
+                        }
                         idx++;
                     }
                 } catch (IOException | CsvException e) {
                     e.printStackTrace();
                 }
 
-                if(!newCsvMap.isEmpty()){
+                if (!newCsvMap.isEmpty()) {
                     String updatedMetricsFileName = destinationPath + "/" + fileName;
                     try (PrintWriter writer = new PrintWriter(updatedMetricsFileName)) {
                         StringBuilder sb = new StringBuilder();
-                        if(!headersList.isEmpty()){
+                        if (!headersList.isEmpty()) {
                             for (String s : headersList) {
-                                if(sb.toString().trim().length() > 0){
+                                if (sb.toString().trim().length() > 0) {
                                     sb.append(',');
                                 }
                                 sb.append(s);
@@ -167,39 +168,19 @@ class MetricsTrimmer implements Callable<Integer> {
                             sb.append('\n');
                         }
                         writer.write(sb.toString());
-                        if(debug){
+                        if (debug) {
                             System.out.println("CSV completed");
                         }
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
                     }
                 }
-            }else{
-                if(debug) {
+            } else {
+                if (debug) {
                     System.out.println("File " + fileName + " contains old data, skip");
                 }
             }
         }
-    }
-
-    private boolean isDataWithinTimeframe(String absolutePathFile) {
-        try {
-            ReversedLinesFileReader reverseReader = new ReversedLinesFileReader(new File(absolutePathFile), StandardCharsets.UTF_8);
-            String line = reverseReader.readLine();
-            if (line == null) {
-                throw new Exception("Last line of CSV file " + absolutePathFile + " does not contain any data!");
-            }
-            CSVParser parser = new CSVParser();
-            String[] fields = parser.parseLine(line);
-
-            long rowDate = Long.parseLong(fields[0] + "000");
-            if(rowDate >= parsedStartDate.getTime()){
-                return true;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return false;
     }
 
     private boolean isLastDateInFileMoreThenStartDate(String absolutePathFile){
