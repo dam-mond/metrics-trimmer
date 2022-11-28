@@ -1,6 +1,8 @@
 import com.opencsv.CSVParser;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.LineIterator;
 import org.apache.commons.io.input.ReversedLinesFileReader;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -30,18 +32,25 @@ class MetricsTrimmer implements Callable<Integer> {
     @Option(names = { "--startDate" }, required = true, description = "Initial valid date for the metrics data, every data prior to this date will be ignored (format dd-mm-yyyy)")
     private String startDate;
 
+    @Option(names = { "--endDate" }, required = false, description = "End date for the metrics data, every date after this date will be ignored (format dd-mm-yyyy)")
+    private String endDate;
+
     @Option(names = { "--debug" }, description = "Print debug logs during execution")
     private boolean debug;
 
     SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
 
     Date parsedStartDate;
-
+    Date parsedEndDate;
     @Override
     public Integer call() {
         System.out.println("Source path: " + sourcePath);
         System.out.println("Destination path: " + destinationPath);
         System.out.println("Start date: " + startDate);
+
+        if (endDate != null) {
+            System.out.println("End date: " + endDate);
+        }
 
         if(sourcePath != null && sourcePath.trim().length() > 0 && startDate != null && startDate.trim().length() > 0){
             Path fullSourcePath = Paths.get(sourcePath);
@@ -58,8 +67,20 @@ class MetricsTrimmer implements Callable<Integer> {
 
             try{
                 parsedStartDate = dateFormat.parse(startDate);
+
                 System.out.println("Parsed start date: " + parsedStartDate);
                 System.out.println("Start date millis: " + parsedStartDate.getTime());
+
+                if (endDate != null) {
+                    parsedEndDate = dateFormat.parse(endDate);
+                    System.out.println("Parsed end date: " + parsedEndDate);
+                    System.out.println("End date millis: " + parsedEndDate.getTime());
+
+                    if (parsedStartDate.compareTo(parsedEndDate) > 0) {
+                        System.out.println("Start date: " + startDate + " cannot be after End date: " + endDate);
+                        System.exit(-1);
+                    }
+                }
 
                 System.out.println("Process started");
                 Files.walk(Paths.get(sourcePath))
@@ -102,25 +123,7 @@ class MetricsTrimmer implements Callable<Integer> {
             List<String> headersList = new ArrayList<>();
             HashMap<String, List<String>> newCsvMap = new LinkedHashMap<>();
 
-            boolean metricContainsDataWithinTimeframe = false;
-            try {
-                ReversedLinesFileReader reverseReader = new ReversedLinesFileReader(new File(absolutePathFile), StandardCharsets.UTF_8);
-                String line = reverseReader.readLine();
-                if (line == null) {
-                    throw new Exception("Last line of CSV file " + fileName + " does not contain any data!");
-                }
-                CSVParser parser = new CSVParser();
-                String[] fields = parser.parseLine(line);
-
-                long rowDate = Long.parseLong(fields[0] + "000");
-                if(rowDate >= parsedStartDate.getTime()){
-                    metricContainsDataWithinTimeframe = true;
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-
-            if(metricContainsDataWithinTimeframe){
+            if(isLastDateInFileMoreThenStartDate(absolutePathFile) && (parsedEndDate != null ? isFirstDateInFileLessThenEndDate(absolutePathFile) : true)){
                 try (CSVReader reader = new CSVReader(new FileReader(absolutePathFile))) {
                     List<String[]> r = reader.readAll();
 
@@ -131,7 +134,7 @@ class MetricsTrimmer implements Callable<Integer> {
                         }
                         try{
                             long rowDate = Long.parseLong(strings[0] + "000");
-                            if(rowDate >= parsedStartDate.getTime()){
+                            if(rowDate >= parsedStartDate.getTime() && rowDate <= parsedEndDate.getTime()){
                                 List<String> values = new ArrayList<>(Arrays.asList(strings).subList(1, strings.length));
                                 newCsvMap.put(strings[0], values);
                             }
@@ -177,6 +180,67 @@ class MetricsTrimmer implements Callable<Integer> {
                 }
             }
         }
+    }
+
+    private boolean isDataWithinTimeframe(String absolutePathFile) {
+        try {
+            ReversedLinesFileReader reverseReader = new ReversedLinesFileReader(new File(absolutePathFile), StandardCharsets.UTF_8);
+            String line = reverseReader.readLine();
+            if (line == null) {
+                throw new Exception("Last line of CSV file " + absolutePathFile + " does not contain any data!");
+            }
+            CSVParser parser = new CSVParser();
+            String[] fields = parser.parseLine(line);
+
+            long rowDate = Long.parseLong(fields[0] + "000");
+            if(rowDate >= parsedStartDate.getTime()){
+                return true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean isLastDateInFileMoreThenStartDate(String absolutePathFile){
+        try (ReversedLinesFileReader reverseReader = new ReversedLinesFileReader(new File(absolutePathFile), StandardCharsets.UTF_8)) {
+            String line = reverseReader.readLine();
+            if (line == null) {
+                throw new Exception("Last line of CSV file " + absolutePathFile + " does not contain any data!");
+            }
+            CSVParser parser = new CSVParser();
+            String[] fields = parser.parseLine(line);
+
+            long rowDate = Long.parseLong(fields[0] + "000");
+            if(rowDate >= parsedStartDate.getTime()){
+                return true;
+            }
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean isFirstDateInFileLessThenEndDate(String absolutePathFile){
+        try (LineIterator lineIterator = FileUtils.lineIterator(new File(absolutePathFile), "UTF-8")){
+            lineIterator.nextLine(); // skip headers
+            String line = lineIterator.nextLine();
+            if (line == null) {
+                throw new Exception("Last line of CSV file " + absolutePathFile + " does not contain any data!");
+            }
+
+            CSVParser parser = new CSVParser();
+            String[] fields = parser.parseLine(line);
+
+            long rowDate = Long.parseLong(fields[0] + "000");
+            if(rowDate <= parsedEndDate.getTime()){
+                return true;
+            }
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 
     private String unzipCsv(Path path) {
