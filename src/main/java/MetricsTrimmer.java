@@ -39,9 +39,9 @@ class MetricsTrimmer implements Callable<Integer> {
     private boolean debug;
 
     SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
-
     Date parsedStartDate;
     Date parsedEndDate;
+
     @Override
     public Integer call() {
         System.out.println("Source path: " + sourcePath);
@@ -134,7 +134,7 @@ class MetricsTrimmer implements Callable<Integer> {
                         }
                         try {
                             long rowDate = Long.parseLong(strings[0] + "000");
-                            if (rowDate >= parsedStartDate.getTime() && rowDate <= parsedEndDate.getTime()) {
+                            if (rowDate >= parsedStartDate.getTime() && (parsedEndDate != null ? rowDate <= parsedEndDate.getTime() : true)) {
                                 List<String> values = new ArrayList<>(Arrays.asList(strings).subList(1, strings.length));
                                 newCsvMap.put(strings[0], values);
                             }

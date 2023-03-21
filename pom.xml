@@ -6,7 +6,7 @@
 
     <groupId>it.dm</groupId>
     <artifactId>metrics-trimmer</artifactId>
-    <version>2.0</version>
+    <version>2.1</version>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
