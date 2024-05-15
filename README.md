@@ -8,7 +8,7 @@ Provides the ability to trim Neo4j metric files, using a start and an end date, 
 2. Execute the downloaded .jar as follows (it requires Java 11):
 
 ```
-java -jar metrics-trimmer-<VERSION>.jar --sourcePath=<SOURCE_PATH> --destinationPath=<DESTINATION_PATH> --startDate=<START_DATE> --endDate=<END_DATE>
+java -jar metrics-trimmer-<VERSION>.jar --sourcePath=<SOURCE_PATH> --destinationPath=<DESTINATION_PATH> --startDate=<START_DATE> --endDate=<END_DATE> --threadCount=<THREAD_COUNT>
 ```
 
 3. A description of each parameter is available by using the help command:
@@ -25,3 +25,5 @@ The following command will read all the .csv metric files from <SOURCE_PATH> and
 ```
 java -jar metrics-trimmer-<VERSION>.jar --sourcePath=<SOURCE_PATH> --destinationPath=<DESTINATION_PATH> --startDate=<START_DATE> --endDate=<END_DATE>
 ```
+
+To speed-up the execution of this process, if you have enough resources on your machine, you can set the amount of threads to specify the degree of parallelisation, using the option `--threadCount`.
