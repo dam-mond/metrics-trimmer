@@ -10,12 +10,17 @@ import picocli.CommandLine.Option;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -38,6 +43,9 @@ class MetricsTrimmer implements Callable<Integer> {
     @Option(names = { "--debug" }, description = "Print debug logs during execution")
     private boolean debug;
 
+    @Option(names = { "--threadCount" }, required = false, defaultValue = "1", description = "Thread count number for parallel processing")
+    private Integer threadCount;
+
     SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
     Date parsedStartDate;
     Date parsedEndDate;
@@ -51,6 +59,8 @@ class MetricsTrimmer implements Callable<Integer> {
         if (endDate != null) {
             System.out.println("End date: " + endDate);
         }
+
+        System.out.println("Thread count: " + threadCount);
 
         if(sourcePath != null && sourcePath.trim().length() > 0 && startDate != null && startDate.trim().length() > 0){
             Path fullSourcePath = Paths.get(sourcePath);
@@ -83,9 +93,19 @@ class MetricsTrimmer implements Callable<Integer> {
                 }
 
                 System.out.println("Process started");
-                Files.walk(Paths.get(sourcePath))
-                        .filter(Files::isRegularFile)
-                        .forEach(this::execute);
+
+                ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(Path.of(sourcePath))) {
+                    for (Path entry : stream) {
+                        File file = entry.toFile();
+                        BasicFileAttributes basicFileAttributes = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
+                        if (basicFileAttributes.isRegularFile()) {
+                            executorService.submit(() -> trimMetricFile(entry));
+                        }
+                    }
+                }
+
+                stopExecutorService(executorService);
                 System.out.println("Process completed!");
             }catch (Exception e){
                 e.printStackTrace();
@@ -93,6 +113,18 @@ class MetricsTrimmer implements Callable<Integer> {
             }
         }
         return 0;
+    }
+
+    private void stopExecutorService(ExecutorService executorService) {
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(5, TimeUnit.HOURS)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException ex) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     public File newFile(File destinationDir, ZipEntry zipEntry) throws IOException {
@@ -107,7 +139,7 @@ class MetricsTrimmer implements Callable<Integer> {
         return destFile;
     }
 
-    private void execute(Path path) {
+    private void trimMetricFile(Path path) {
         if (debug) {
             System.out.println("Filename: " + path.getFileName());
         }
